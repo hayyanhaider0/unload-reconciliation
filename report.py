@@ -187,7 +187,7 @@ def print_reconciliation_audit(cursor):
     print("-" * 60)
 
     print(
-        f"{audit.get('RECONCILED', 0):<15}"
+        f"{audit.get('RECONCILED', 0) + audit.get('WARNING', 0):<15}"
         f"{audit.get('FLAGGED', 0):<15}"
         f"{audit.get('DELETED', 0):<15}"
         f"{audit.get('DUPLICATE', 0):<15}"
