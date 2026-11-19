@@ -9,6 +9,7 @@ import json
 class ReconciliationStatus(StrEnum):
     RECONCILED = "RECONCILED"
     FLAGGED = "FLAGGED"
+    DUPLICATE = "DUPLICATE"
     DELETED = "DELETED"
 
 class ReconciliationIssue(StrEnum):
@@ -24,6 +25,8 @@ class ReconciliationIssue(StrEnum):
     TRUCK_CAPACITY_EXCEEDED = "TRUCK_CAPACITY_EXCEEDED"
     # Field reference doesn't exist in fields.json
     UNKNOWN_FIELD = "UNKNOWN_FIELD"
+    # Shows the duplicate record
+    DUPLICATE_OF = "DUPLICATE_OF"
 
 
 # Constants
@@ -275,6 +278,54 @@ def validate_field_references(reconciled_records, fields_by_id):
         if record["field_id"] not in fields_by_id:
             mark_flagged(record, ReconciliationIssue.UNKNOWN_FIELD.value)
 
+def find_duplicates(reconciled_records, controller_by_id, cloud_by_id, inferred_clock_offset):
+    if inferred_clock_offset is None:
+        return
+
+    for record in reconciled_records.values():
+        record_id = record["id"]
+
+        # Only compare records that exist exclusively on the controller
+        if record_id not in controller_by_id or record_id in cloud_by_id:
+            continue
+
+        controller_record = controller_by_id[record_id]
+        controller_weight_kg = normalize_weight(controller_record)
+
+        if controller_weight_kg is None:
+            continue
+
+        for cloud_id, cloud_record in cloud_by_id.items():
+            if cloud_id == record_id:
+                continue
+
+            if controller_record["field_id"] != cloud_record["field_id"]:
+                continue
+
+            if controller_record["truck_id"] != cloud_record["truck_id"]:
+                continue
+
+            if controller_record["crop"] != cloud_record["crop"]:
+                continue
+
+            if round(controller_weight_kg, 1) != round(cloud_record["weight_kg"], 1):
+                continue
+
+            controller_time = dt.fromisoformat(controller_record["unloaded_at"])
+            cloud_time = dt.fromisoformat(cloud_record["unloaded_at"])
+
+            # Correct the controller timestamp using the inferred clock offset
+            controller_time = controller_time.replace(tzinfo=cloud_time.tzinfo)
+            corrected_controller_time = controller_time - timedelta(
+                seconds=inferred_clock_offset
+            )
+
+            if corrected_controller_time == cloud_time:
+                record["status"] = "DUPLICATE"
+                record["reason"] = "DUPLICATE_OF"
+                record["duplicate_of"] = cloud_id
+                record["clock_offset_seconds"] = inferred_clock_offset
+                break
 
 # Reconciles input records and returns the results without accessing the database
 def reconcile(controller_unloads, cloud_unloads, fields, trucks):
@@ -328,6 +379,7 @@ def reconcile(controller_unloads, cloud_unloads, fields, trucks):
     # Validate reconciled records
     validate_truck_capacities(reconciled_records, trucks_by_id)
     validate_field_references(reconciled_records, fields_by_id)
+    find_duplicates(reconciled_records, controller_by_id, cloud_by_id, inferred_clock_offset)
 
     # Verify that every unique source ID is accounted for
     source_ids = controller_by_id.keys() | cloud_by_id.keys()
