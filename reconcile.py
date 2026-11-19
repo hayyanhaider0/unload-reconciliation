@@ -2,6 +2,7 @@
 from datetime import datetime as dt, timedelta
 from pathlib import Path
 from enum import StrEnum
+from collections import Counter
 import json
 
 
@@ -361,7 +362,15 @@ def reconcile(controller_unloads, cloud_unloads, fields, trucks):
         for record_id in matched_ids
     }
 
-    inferred_clock_offset = next(iter(clock_offsets)) if len(clock_offsets) == 1 else None
+    clock_offsets = [
+        get_clock_offset(controller_by_id[record_id], cloud_by_id[record_id])
+        for record_id in matched_ids
+    ]
+
+    inferred_clock_offset = (
+        Counter(clock_offsets).most_common(1)[0][0]
+        if clock_offsets else None
+    )
 
     reconciled_records = {}
 
