@@ -59,11 +59,14 @@ The reconciliation process:
 
 1. Matches controller and cloud records using their unload IDs.
 2. Converts controller weights to kilograms.
-3. Compares weights and timestamps for matched records.
-4. Handles records marked as deleted in the cloud.
-5. Flags records that exist in only one source.
-6. Checks accepted unloads against truck capacities and validates field references.
-7. Preserves the original records and reconciliation results in PostgreSQL.
+3. Infers the clock offset using the most common offset among matched records.
+4. Compares weights and corrected update timestamps, accepting whichever source was updated later.
+5. Handles records marked as deleted in the cloud.
+6. Accepts valid controller-only and cloud-only records while preserving their source.
+7. Identifies duplicate unloads with different IDs and counts them only once.
+8. Recovers missing controller weight units using matching cloud weights when possible.
+9. Checks truck capacities, adds warnings for overweight unloads, and validates field references.
+10. Preserves the original records and reconciliation results in PostgreSQL.
 
 Records that cannot be confidently reconciled are flagged for manual review rather than silently discarded.
 
@@ -72,10 +75,12 @@ Records that cannot be confidently reconciled are flagged for manual review rath
 | Status | Description |
 |---|---|
 | `RECONCILED` | Record successfully reconciled and accepted |
+| `WARNING`	| Accepted unload with a potential issue, such as exceeding truck capacity |
 | `FLAGGED` | Record requires manual review |
 | `DELETED` | Record marked as deleted in the cloud |
+| `DUPLICATE` | Duplicate of another unload, excluded from totals |
 
-Records with different IDs are preserved separately. The application does not automatically classify them as duplicates because the provided data does not establish a reliable way to identify cross-ID duplicates.
+The application identifies likely duplicates using matching field, truck, crop, weight, and corrected timestamps. Both records are preserved for auditing, but the unload is counted only once.
 
 ## Output
 
@@ -91,10 +96,16 @@ Running the application generates a terminal report containing:
 - Reason the record was flagged
 - Additional details about the discrepancy
 
+**Warnings**
+- Records that exceed truck capacity
+- Truck name, unload weight, and rated capacity
+- Warning records are still included in accepted harvest totals
+
 **Automatic Reconciliation Decisions**
-- Records automatically overridden or marked as deleted
-- Record ID, status, and decision
-- Original controller and accepted cloud weights for weight overrides
+- Records automatically overridden, deleted, or marked as duplicates
+- Record ID, status, and reconciliation reason
+- Controller and cloud weights for weight overrides
+- Original unload IDs for duplicate records
 
 **Reconciliation Audit**
 - Accepted records
@@ -118,13 +129,24 @@ Run the tests inside Docker:
 docker compose run --rm app python -m unittest discover -s tests -v
 ```
 
-Three tests cover:
+### My Tests
 
-- **Record accounting:** Every unique unload ID from both sources must appear exactly once in the reconciliation output.
-- **Cloud weight override:** When the cloud has a later update, the cloud weight is accepted.
-- **Controller updated later:** When the controller has a later update and the weights differ, the record is flagged for manual review.
+The five tests cover:
 
-These tests focus on preventing lost records and incorrect weight reconciliation.
+- **Record accounting:** Every unique unload ID from both sources appears exactly once in the reconciliation output.
+- **Cloud weight override:** A later cloud update overrides the controller weight.
+- **Controller weight override:** A later controller update overrides the cloud weight after clock correction.
+- **Deletion priority:** A cloud record remains deleted even when the controller has a later update.
+- **Deleted duplicates:** A deleted cloud unload cannot be brought back into accepted totals by a controller duplicate with a different ID.
+
+### Review Tests
+
+- **Test 1 — Later controller edit:** Checks that a controller weight is accepted when its corrected update timestamp is newer than the cloud's. This originally failed because I was flagging later controller edits instead of accepting them.
+- **Test 2 — Duplicate unload:** Checks that two records with different IDs representing the same unload are not counted twice. This originally failed because I had removed cross-ID duplicate detection.
+
+Both tests helped identify issues in my original reconciliation logic, which I fixed during the review.
+
+These tests focus on preventing lost records, incorrect weight reconciliation, and deleted records accidentally being counted towards harvest totals.
 
 ## Project Structure
 
