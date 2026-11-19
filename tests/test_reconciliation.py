@@ -96,9 +96,10 @@ class TestReconciliation(unittest.TestCase):
         result = reconciled_records["test-002"]
 
         self.assertEqual(clock_offset, -3600)
-        self.assertEqual(result["status"], "FLAGGED")
-        self.assertEqual(result["reason"], "WEIGHT_MISMATCH")
-        self.assertEqual(result["original_controller_weight_kg"], 10000)
+        self.assertEqual(result["status"], "RECONCILED")
+        self.assertEqual(result["reason"], "CONTROLLER_WEIGHT_OVERRIDE")
+        self.assertEqual(result["original_cloud_weight_kg"], 10500)
+        self.assertEqual(result["weight_kg"], 10000)
 
 if __name__ == "__main__":
     unittest.main()

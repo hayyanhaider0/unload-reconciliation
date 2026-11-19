@@ -38,3 +38,7 @@
 - Validate field, truck, and crop differences in matched records.
 - Add controller IDs so I can properly identify which records came from which controller.
 - Add a way to manually review and resolve flagged records.
+
+## Review
+
+- Test 1 failed because a later controller edit wasn't being used as a source of truth. Originally, I had this implemented, but removed it because I assumed that since the controller clock could potentially be incorrect, there was no way to tell whether the data is correct or not without manual review. I'm guessing the assumption here is that all unloads are coming from the same controller or that every controller has the same clock offset for some reason. There is evidence of this because all unloads on the controller are offset by -3600 compared to the cloud.

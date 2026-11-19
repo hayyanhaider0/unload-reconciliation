@@ -16,6 +16,8 @@ class ReconciliationIssue(StrEnum):
     WEIGHT_MISMATCH = "WEIGHT_MISMATCH"
     # Used when the cloud weight is updated after the controller weight
     CLOUD_WEIGHT_OVERRIDE = "CLOUD_WEIGHT_OVERRIDE"
+    # Used when the controller weight is updated after the cloud weight
+    CONTROLLER_WEIGHT_OVERRIDE = "CONTROLLER_WEIGHT_OVERRIDE"
     CONTROLLER_ONLY_IMPORT = "CONTROLLER_ONLY_IMPORT"
     CLOUD_ONLY_IMPORT = "CLOUD_ONLY_IMPORT"
     # Used when the unload weight is higher than the truck's capacity
@@ -82,7 +84,12 @@ def is_cloud_updated_later(controller_record, cloud_record, clock_offset):
     corrected_controller_time = controller_updated_at - timedelta(seconds=clock_offset)
 
     # Check if the cloud was updated after the controller
-    return cloud_updated_at > corrected_controller_time
+    if cloud_updated_at > corrected_controller_time:
+        return "CLOUD"
+    elif corrected_controller_time > cloud_updated_at:
+        return "CONTROLLER"
+    else:
+        return "EQUAL"
 
 # Validates if the weight of a record does not exceed the truck's capacity
 def validate_truck_capacity(record, trucks_by_id):
@@ -131,7 +138,9 @@ def reconcile_deletions(record_id, cloud_record, reconciled_records):
 # Reconciles the weights between controller and cloud records, taking into account the clock offset and storing the results in reconciled_records
 def reconcile_weights(record_id, controller_weight_kg, cloud_record, controller_record, clock_offset, reconciled_records):
     if round(controller_weight_kg, 1) != round(cloud_record["weight_kg"], 1):
-        if is_cloud_updated_later(controller_record, cloud_record, clock_offset):
+        is_updated_later = is_cloud_updated_later(controller_record, cloud_record, clock_offset)
+
+        if is_updated_later == "CLOUD":
             # Store successfully reconciled records using cloud data
             reconciled_records[record_id] = {
                 **cloud_record,
@@ -140,7 +149,17 @@ def reconcile_weights(record_id, controller_weight_kg, cloud_record, controller_
                 "original_controller_weight_kg": controller_weight_kg,
                 "clock_offset_seconds": clock_offset
             }
-        else:
+        elif is_updated_later == "CONTROLLER":
+            # Store successfully reconciled records using controller data
+            reconciled_records[record_id] = {
+                **controller_record,
+                "status": ReconciliationStatus.RECONCILED.value,
+                "reason": ReconciliationIssue.CONTROLLER_WEIGHT_OVERRIDE.value,
+                "weight_kg": controller_weight_kg,
+                "original_cloud_weight_kg": cloud_record["weight_kg"],
+                "clock_offset_seconds": clock_offset
+            }
+        elif is_updated_later == "EQUAL":
             # Store flagged records with weight mismatch
             flag_record(
                 record_id,
@@ -163,7 +182,7 @@ def reconcile_weights(record_id, controller_weight_kg, cloud_record, controller_
 
 
 # Reconciles records that exist in both sources
-def reconcile_matched_ids(matched_ids, controller_by_id, cloud_by_id, reconciled_records):
+def reconcile_matched_ids(matched_ids, controller_by_id, cloud_by_id, reconciled_records, inferred_clock_offset):
     for record_id in matched_ids:
         controller_record = controller_by_id[record_id]
         cloud_record = cloud_by_id[record_id]
@@ -175,7 +194,8 @@ def reconcile_matched_ids(matched_ids, controller_by_id, cloud_by_id, reconciled
         controller_weight_kg = normalize_weight(controller_record)
 
         # Calculate timestamp offset
-        clock_offset = get_clock_offset(controller_record, cloud_record)
+        # clock_offset = get_clock_offset(controller_record, cloud_record)
+        clock_offset = inferred_clock_offset
 
         # Compare weights
         if controller_weight_kg is None:
@@ -273,6 +293,14 @@ def reconcile(controller_unloads, cloud_unloads, fields, trucks):
     controller_only = controller_by_id.keys() - cloud_by_id.keys()
     cloud_only = cloud_by_id.keys() - controller_by_id.keys()
 
+    # Find clock offset pattern, if any
+    clock_offsets = {
+        get_clock_offset(controller_by_id[record_id], cloud_by_id[record_id])
+        for record_id in matched_ids
+    }
+
+    inferred_clock_offset = next(iter(clock_offsets)) if len(clock_offsets) == 1 else None
+
     reconciled_records = {}
 
     # Reconcile records
@@ -280,7 +308,8 @@ def reconcile(controller_unloads, cloud_unloads, fields, trucks):
         matched_ids,
         controller_by_id,
         cloud_by_id,
-        reconciled_records
+        reconciled_records,
+        inferred_clock_offset
     )
 
     reconcile_controller_only_records(
