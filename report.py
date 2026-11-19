@@ -2,7 +2,6 @@
 import os
 import psycopg
 
-
 # Constants
 DATABASE_URL = os.environ["DATABASE_URL"]
 
@@ -19,7 +18,7 @@ def print_field_summary(cursor):
         FROM fields f
         LEFT JOIN unloads u
             ON f.id = u.field_id
-            AND u.status = 'RECONCILED'
+            AND u.status IN ('RECONCILED', 'WARNING')
         GROUP BY f.id, f.name
         ORDER BY f.name
     """)
@@ -141,6 +140,36 @@ def print_automatic_decisions(cursor):
 
         print("-" * 80)
 
+def print_warnings(cursor):
+    cursor.execute("""
+        SELECT u.id, u.weight_kg, u.reason, t.name, t.capacity_kg
+        FROM unloads AS u
+        JOIN trucks AS t ON u.truck_id = t.id
+        WHERE u.status = 'WARNING'
+        ORDER BY u.id
+    """)
+
+    records = cursor.fetchall()
+
+    print("\nWARNINGS")
+    print("=" * 80)
+
+    if not records:
+        print("No warnings.")
+        return
+
+    for record in records:
+        record_id, weight_kg, reason, truck_name, capacity_kg = record
+
+        print(f"ID:      {record_id}")
+        print(f"Warning: {reason}")
+        print(f"Truck:   {truck_name}")
+        print(
+            f"Details: Weight: {weight_kg:.1f} kg | "
+            f"Truck capacity: {capacity_kg:.1f} kg"
+        )
+        print("-" * 80)
+
 # Retrieves and prints the number of records for each reconciliation status
 def print_reconciliation_audit(cursor):
     cursor.execute("""
@@ -195,7 +224,6 @@ def print_reconciliation_audit(cursor):
         for reason, count in decisions:
             print(f"{reason:<35}{count:>5}")
 
-
 # Connects to PostgreSQL and prints the reconciliation report
 def main():
     with psycopg.connect(DATABASE_URL) as conn:
@@ -207,6 +235,7 @@ def main():
             print_field_summary(cursor)
             print_unresolved_records(cursor)
             print_automatic_decisions(cursor)
+            print_warnings(cursor)
             print_reconciliation_audit(cursor)
 
 

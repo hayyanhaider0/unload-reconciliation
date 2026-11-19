@@ -11,6 +11,8 @@ class ReconciliationStatus(StrEnum):
     FLAGGED = "FLAGGED"
     DUPLICATE = "DUPLICATE"
     DELETED = "DELETED"
+    # Warning records are accepted, but also shown to the user
+    WARNING = "WARNING"
 
 class ReconciliationIssue(StrEnum):
     MISSING_UNIT = "MISSING_UNIT"
@@ -278,8 +280,8 @@ def validate_truck_capacities(reconciled_records, trucks_by_id):
             continue
 
         if not validate_truck_capacity(record, trucks_by_id):
-            mark_flagged(record, ReconciliationIssue.TRUCK_CAPACITY_EXCEEDED.value)
-
+            record["status"] = ReconciliationStatus.WARNING.value
+            record["reason"] = ReconciliationIssue.TRUCK_CAPACITY_EXCEEDED.value
 
 # Validates that every unload references an existing field
 def validate_field_references(reconciled_records, fields_by_id):
