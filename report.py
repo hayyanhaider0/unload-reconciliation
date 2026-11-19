@@ -125,7 +125,7 @@ def print_automatic_decisions(cursor):
         print(f"Status:   {status}")
         print(f"Decision: {reason}")
 
-        if reason == "CLOUD_WEIGHT_OVERRIDE":
+        if reason in ("CLOUD_WEIGHT_OVERRIDE", "CONTROLLER_WEIGHT_OVERRIDE"):
             controller_weight = controller.get("weight") if controller else None
             controller_unit = controller.get("unit", "") if controller else ""
             cloud_weight = cloud.get("weight_kg") if cloud else None
