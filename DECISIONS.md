@@ -58,6 +58,8 @@
 - I also fixed an issue in my SQL field summary where the `OR` condition caused warning records to be counted against multiple fields. I changed it to use `IN ('RECONCILED', 'WARNING')` so that the field ID still has to match.
 - Decided to add a test to make sure the new `WARNING` status doesn't override previously `DELETED` records.
 - I changed my clock offset inference to use the most common offset, because if even one unloaded_at timestamp was changed, it would break the original implementation. This would still be unreliable in a dataset without a clear pattern. In a production environment, having a controller_id would make it easier to calculate the offset for each controller separately.
+- I added a test where a cloud record was deleted but a duplicate of it still existed on the controller with a different ID. I wanted to make sure the controller copy wouldn't accidentally bring the deleted unload back into the totals. The test passed, with the cloud record marked `DELETED` and the controller copy marked `DUPLICATE`. Neither record was counted towards the totals.
+- Added additional information to duplicates to show the ID of the record the duplicate is of.
 
 ### Final Results
 

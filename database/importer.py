@@ -79,9 +79,9 @@ def import_data(unloads):
                     INSERT INTO unloads (
                         id, field_id, unresolved_field_id, truck_id, crop,
                         weight_kg, unloaded_at, status, reason, previous_reason,
-                        controller_record, cloud_record
+                        controller_record, cloud_record, duplicate_of
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         field_id = EXCLUDED.field_id,
                         unresolved_field_id = EXCLUDED.unresolved_field_id,
@@ -93,7 +93,8 @@ def import_data(unloads):
                         reason = EXCLUDED.reason,
                         previous_reason = EXCLUDED.previous_reason,
                         controller_record = EXCLUDED.controller_record,
-                        cloud_record = EXCLUDED.cloud_record
+                        cloud_record = EXCLUDED.cloud_record,
+                        duplicate_of = EXCLUDED.duplicate_of
                 """, (
                     unload["id"],
                     valid_field_id,
@@ -106,5 +107,6 @@ def import_data(unloads):
                     unload.get("reason"),
                     unload.get("previous_reason"),
                     Jsonb(unload["controller_record"]) if unload.get("controller_record") is not None else None,
-                    Jsonb(unload["cloud_record"]) if unload.get("cloud_record") is not None else None
+                    Jsonb(unload["cloud_record"]) if unload.get("cloud_record") is not None else None,
+                    unload.get("duplicate_of")
                 ))

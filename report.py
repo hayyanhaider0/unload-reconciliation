@@ -104,10 +104,10 @@ def print_unresolved_records(cursor):
 def print_automatic_decisions(cursor):
     cursor.execute("""
         SELECT
-            id, status, reason, controller_record, cloud_record
+            id, status, reason, controller_record, cloud_record, duplicate_of
         FROM unloads
         WHERE (status = 'RECONCILED' AND reason IS NOT NULL)
-           OR status = 'DELETED'
+           OR status in ('DELETED', 'DUPLICATE') 
         ORDER BY status, reason, id
     """)
 
@@ -120,7 +120,7 @@ def print_automatic_decisions(cursor):
         print("No automatic decisions.")
         return
 
-    for record_id, status, reason, controller, cloud in records:
+    for record_id, status, reason, controller, cloud, duplicate_of in records:
         print(f"ID:       {record_id}")
         print(f"Status:   {status}")
         print(f"Decision: {reason}")
@@ -137,6 +137,9 @@ def print_automatic_decisions(cursor):
 
         elif status == "DELETED":
             print("Details:  Record marked as deleted in the cloud")
+
+        elif status == "DUPLICATE":
+            print(f"Duplicate of: {duplicate_of}")
 
         print("-" * 80)
 
