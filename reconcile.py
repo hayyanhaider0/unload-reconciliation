@@ -202,13 +202,22 @@ def reconcile_matched_ids(matched_ids, controller_by_id, cloud_by_id, reconciled
 
         # Compare weights
         if controller_weight_kg is None:
-            flag_record(
-                record_id,
-                ReconciliationIssue.MISSING_UNIT.value,
-                controller_record,
-                cloud_record,
-                reconciled_records
-            )
+            if cloud_record.get("weight_kg") is None:
+                flag_record(
+                    record_id,
+                    ReconciliationIssue.MISSING_UNIT.value,
+                    controller_record,
+                    cloud_record,
+                    reconciled_records
+                )
+            else:
+                reconciled_records[record_id] = {
+                    **cloud_record,
+                    "status": ReconciliationStatus.RECONCILED.value,
+                    "reason": ReconciliationIssue.MISSING_UNIT.value,
+                    "clock_offset_seconds": clock_offset
+                }
+
             continue
 
         reconcile_weights(
