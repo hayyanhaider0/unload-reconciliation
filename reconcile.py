@@ -240,7 +240,7 @@ def reconcile_controller_only_records(controller_only, controller_by_id, cloud_b
         reconciled_records[record_id] = {
             **controller_record,
             "weight_kg": controller_weight_kg,
-            "status": ReconciliationStatus.FLAGGED.value,
+            "status": ReconciliationStatus.RECONCILED.value,
             "reason": ReconciliationIssue.CONTROLLER_ONLY_IMPORT.value,
             "clock_offset_seconds": None
         }
@@ -256,7 +256,7 @@ def reconcile_cloud_only_records(cloud_only, cloud_by_id, reconciled_records):
 
         reconciled_records[record_id] = {
             **cloud_record,
-            "status": ReconciliationStatus.FLAGGED.value,
+            "status": ReconciliationStatus.RECONCILED.value,
             "reason": ReconciliationIssue.CLOUD_ONLY_IMPORT.value,
             "clock_offset_seconds": None
         }
