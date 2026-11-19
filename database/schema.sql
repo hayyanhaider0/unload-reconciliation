@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS unloads (
     weight_kg NUMERIC CHECK (weight_kg >= 0),
     unloaded_at TEXT NOT NULL,
     status TEXT NOT NULL CHECK (
-        status IN ('RECONCILED', 'FLAGGED', 'DELETED', 'DUPLICATE')
+        status IN ('RECONCILED', 'FLAGGED', 'DELETED', 'DUPLICATE', 'WARNING')
     ),
     reason TEXT,
     previous_reason TEXT,
